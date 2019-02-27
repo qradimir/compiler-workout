@@ -1,14 +1,14 @@
 (* Opening a library for generic programming (https://github.com/dboulytchev/GT).
    The library provides "@type ..." syntax extension and plugins like show, etc.
 *)
-open GT 
-    
+open GT
+
 (* Simple expressions: syntax and semantics *)
 module Expr =
   struct
-    
-    (* The type for expressions. Note, in regular OCaml there is no "@type..." 
-       notation, it came from GT. 
+
+    (* The type for expressions. Note, in regular OCaml there is no "@type..."
+       notation, it came from GT.
     *)
     @type t =
     (* integer constant *) | Const of int
@@ -22,14 +22,14 @@ module Expr =
         +, -                 --- addition, subtraction
         *, /, %              --- multiplication, division, reminder
     *)
-                                                            
+
     (* State: a partial map from variables to integer values. *)
-    type state = string -> int 
+    type state = string -> int
 
     (* Empty state: maps every variable into nothing. *)
     let empty = fun x -> failwith (Printf.sprintf "Undefined variable %s" x)
 
-    (* Update: non-destructively "modifies" the state s by binding the variable x 
+    (* Update: non-destructively "modifies" the state s by binding the variable x
       to value v and returns the new state.
     *)
     let update x v s = fun y -> if x = y then v else s y
@@ -61,21 +61,21 @@ module Expr =
         | "*"  -> ( * )
         | "/"  -> ( / )
         | "%"  -> ( mod )
-        | _    -> failwith (Printf.sprintf "Unknown operator");;
+        | _    -> failwith "Unknown operator";;
 
     (* Expression evaluator
 
           val eval : state -> t -> int
- 
-       Takes a state and an expression, and returns the value of the expression in 
+
+       Takes a state and an expression, and returns the value of the expression in
        the given state.
     *)
-    let rec eval s e = match e with
+    let rec eval st e = match e with
         | Const n          -> n
-        | Var x            -> s x
-        | Binop (op, l, r) -> eval_op op (eval s l) (eval s r);;
+        | Var var          -> st var
+        | Binop (op, l, r) -> eval_op op (eval st l) (eval st r);;
   end
-                    
+
 (* Simple statements: syntax and sematics *)
 module Stmt =
   struct
@@ -88,7 +88,10 @@ module Stmt =
     (* composition                      *) | Seq    of t * t with show
 
     (* The type of configuration: a state, an input stream, an output stream *)
-    type config = Expr.state * int list * int list 
+    type config = Expr.state * int list * int list
+
+    (* Exception where configuration has no input *)
+    let no_input _ = failwith "Not enough input (Syntax)"
 
     (* Statement evaluator
 
@@ -96,14 +99,21 @@ module Stmt =
 
        Takes a configuration and a statement, and returns another configuration
     *)
-    let eval _ = failwith "Not implemented yet"
-                                                         
+    let rec eval ((st, is, os) as cfg) stmt = match stmt with
+        | Read var           -> (match is with
+            | i :: is0 -> (Expr.update var i st, is0, os)
+            | _        -> no_input ()
+            )
+        | Write expr         -> (st, is, Expr.eval st expr :: os)
+        | Assign (var, expr) -> (Expr.update var (Expr.eval st expr) st, is, os)
+        | Seq (fst, snd)     -> eval (eval cfg fst) snd
+        ;;
   end
 
 (* The top-level definitions *)
 
 (* The top-level syntax category is statement *)
-type t = Stmt.t    
+type t = Stmt.t
 
 (* Top-level evaluator
 
