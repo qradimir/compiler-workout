@@ -34,6 +34,35 @@ module Expr =
     *)
     let update x v s = fun y -> if x = y then v else s y
 
+    (* Cast bool to int *)
+    let to_int b = if b then 1 else 0
+
+    (* Cast int to bool *)
+    let from_int i = i != 0
+
+    (* Cast (int->int->bool) to (int->int->int) *)
+    let cast_op1 f = fun a b -> to_int (f a b)
+
+    (* Cast (bool->bool->bool) to (int->int->int) *)
+    let cast_op2 f = fun a b -> to_int (f (from_int a) (from_int b))
+
+    (* Source operator into OCaml operator *)
+    let eval_op op = match op with
+        | "!!" -> cast_op2 ( || )
+        | "&&" -> cast_op2 ( && )
+        | "==" -> cast_op1 ( = )
+        | "!=" -> cast_op1 ( <> )
+        | "<=" -> cast_op1 ( <= )
+        | "<"  -> cast_op1 ( < )
+        | ">=" -> cast_op1 ( >= )
+        | ">"  -> cast_op1 ( > )
+        | "+"  -> ( + )
+        | "-"  -> ( - )
+        | "*"  -> ( * )
+        | "/"  -> ( / )
+        | "%"  -> ( mod )
+        | _    -> failwith (Printf.sprintf "Unknown operator");;
+
     (* Expression evaluator
 
           val eval : state -> t -> int
@@ -41,8 +70,10 @@ module Expr =
        Takes a state and an expression, and returns the value of the expression in 
        the given state.
     *)
-    let eval _ = failwith "Not implemented yet"
-
+    let rec eval s e = match e with
+        | Const n          -> n
+        | Var x            -> s x
+        | Binop (op, l, r) -> eval_op op (eval s l) (eval s r);;
   end
                     
 (* Simple statements: syntax and sematics *)
